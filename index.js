@@ -3,6 +3,16 @@ const Cortex                = require('ion-cortex');
 const ManagersLoader        = require('./loaders/ManagersLoader.js');
 const Aeon                  = require('aeon-machine');
 
+// Optional MongoDB connection (used by the School Management System API)
+// Keeps template behavior intact for other services.
+try {
+    if (config.dotEnv.MONGO_URI) {
+        require('./connect/mongo')({ uri: config.dotEnv.MONGO_URI });
+    }
+} catch (err) {
+    console.log('Mongo connection init failed:', err.message);
+}
+
 process.on('uncaughtException', err => {
     console.log(`Uncaught Exception:`)
     console.log(err, err.stack);
