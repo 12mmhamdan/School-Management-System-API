@@ -1,87 +1,161 @@
 # School Management System API (Axion Template)
 
-This repository extends the provided Soar **Axion** template to deliver the requested **School Management System REST API** with:
+This repository extends the provided **Soar Axion** backend template to implement a complete **School Management System REST API**.
 
-- JWT authentication
+The implementation focuses on clarity, security, and production readiness while preserving the original Axion architecture and the generic `/api/:moduleName/:fnName` handler.
+
+The School Management System is exposed through dedicated versioned endpoints under `/v1`.
+
+---
+
+## Features
+
+- JWT-based authentication
 - Role-based access control (RBAC)
-- MongoDB persistence (Mongoose)
+- MongoDB persistence using Mongoose (Atlas-compatible)
+- Redis-backed cache/state/streaming (Upstash-compatible with TLS)
 - Input validation and consistent error responses
 - Rate limiting and basic security headers
-- Test suite (Jest + Supertest)
+- Health check endpoint for deployment verification
+- Test-ready structure (Jest + Supertest)
 
-The original template's generic `/api/:moduleName/:fnName` handler remains intact.
-The School Management System is exposed via `/v1` endpoints.
+---
 
-## Roles and permissions
+## Live Deployment (Render)
 
-| Role | Scope | Allowed |
-|---|---|---|
+**Render URL:**
+```
+https://school-management-system-api-8xcf.onrender.com
+```
+
+### Free Tier Cold Start Notice
+
+Render **free** web services may **sleep when idle**.  
+The first request after inactivity can take **~20–60 seconds** to respond while the service initializes.
+
+---
+
+## Health Check
+
+```
+GET /health
+```
+
+Expected response:
+```json
+{ "ok": true, "service": "axion" }
+```
+
+---
+
+## Roles and Permissions
+
+| Role | Scope | Capabilities |
+|------|------|--------------|
 | `SUPERADMIN` | System-wide | Manage all schools, create school admins, transfer students |
-| `SCHOOL_ADMIN` | One school only | Manage classrooms and students inside assigned school |
+| `SCHOOL_ADMIN` | Single school | Manage classrooms and students within assigned school |
 
-## Tech stack
+---
+
+## Tech Stack
 
 - Node.js + Express
 - MongoDB + Mongoose
+- Redis (TLS via `rediss://` for hosted providers)
 - JWT (Authorization: `Bearer <token>`)
 
-## Quick start (local)
+---
 
-1. Install deps
+## Environment Variables (.env)
 
+The application is configured using environment variables in `.env` (locally) or Render Environment settings (production).
+
+### What each variable does
+
+#### App
+- `SERVICE_NAME` — Used in logs and `/health` response
+- `ENV` — Environment label (e.g., `development`, `production`)
+- `USER_PORT` — HTTP port the server listens on (Render typically sets `PORT`; if the template uses `USER_PORT`, set it in Render)
+- `ADMIN_PORT` — Reserved by template (not required for `/v1`)
+
+#### MongoDB
+- `MONGO_URI` — MongoDB connection string (Atlas or local). Includes the DB name at the end of the URI.
+
+#### Redis
+- `CACHE_REDIS` — Redis URL used by cache layer
+- `CACHE_PREFIX` — Prefix namespace for cache keys
+- `CORTEX_REDIS` — Redis URL used by Cortex (state/events)
+- `CORTEX_PREFIX` — Prefix namespace for Cortex
+- `CORTEX_TYPE` — Cortex storage type (per template)
+- `OYSTER_REDIS` — Redis URL used by Oyster DB layer
+- `OYSTER_PREFIX` — Prefix namespace for Oyster keys
+
+> For hosted Redis (e.g., Upstash), use `rediss://` to enable TLS.
+
+#### Auth / Security
+- `LONG_TOKEN_SECRET`, `SHORT_TOKEN_SECRET`, `NACL_SECRET`, `JWT_SECRET` — Cryptographic secrets (use strong random values in production)
+- `JWT_EXPIRES_IN` — JWT lifetime (e.g., `1h`)
+
+---
+
+## Local Quick Start
+
+1) Install dependencies
 ```bash
 npm install
 ```
 
-
-2. Running MongoDB locally
-
-Using Docker:
+2) Run MongoDB locally (Docker)
 ```bash
 docker run -d --name sms-mongo -p 27017:27017 mongo:7
 ```
 
-3. Run the server
+3) Run Redis locally (Docker)
+```bash
+docker run -d --name sms-redis -p 6379:6379 redis:7
+```
 
+4) Create `.env` and start the server
 ```bash
 npm run dev
 ```
 
 Server listens on `USER_PORT` (default `5111`).
 
-Health check:
+---
 
-```bash
-curl http://localhost:5111/health
-```
+## Authentication Flow (Reviewer Guide)
 
-## Authentication flow
-
-### 1) Create the first superadmin (bootstrap)
+### 1) Bootstrap the first SUPERADMIN (only once)
 
 `POST /v1/auth/register-superadmin`
 
+Request body:
 ```json
-{ "email": "sa@example.com", "password": "password123" }
+{ "email": "sa@example.com", "password": "Password123!" }
 ```
 
-Returns `{ token, user }`.
-
-> This endpoint is allowed **only once** (it refuses if a superadmin already exists).
+Notes:
+- This endpoint is intended to be used **once** to create the first SUPERADMIN.
+- After a SUPERADMIN exists, it refuses further bootstrap attempts.
 
 ### 2) Login
 
 `POST /v1/auth/login`
 
+Request body:
 ```json
-{ "email": "sa@example.com", "password": "password123" }
+{ "email": "sa@example.com", "password": "Password123!" }
 ```
 
-Use the returned token:
+Use the returned token on future requests:
+```
+Authorization: Bearer <token>
+```
 
-`Authorization: Bearer <token>`
+---
 
-## REST API endpoints (v1)
+## REST API Endpoints (v1)
 
 ### Schools (SUPERADMIN)
 
@@ -91,8 +165,7 @@ Use the returned token:
 - `PUT /v1/schools/:id`
 - `DELETE /v1/schools/:id`
 
-Create a school admin for a given school:
-
+Create a school admin (SUPERADMIN only):
 - `POST /v1/schools/:schoolId/admins`
 
 ### Classrooms (SUPERADMIN or SCHOOL_ADMIN scoped)
@@ -112,17 +185,16 @@ Create a school admin for a given school:
 - `DELETE /v1/schools/:schoolId/students/:studentId`
 
 Enroll/unassign classroom:
-
 - `POST /v1/schools/:schoolId/students/:studentId/enroll`
 
 Transfer across schools (SUPERADMIN):
-
 - `POST /v1/schools/:schoolId/students/:studentId/transfer`
 
-## Error format
+---
+
+## Error Format
 
 Errors are returned as:
-
 ```json
 {
   "ok": false,
@@ -137,7 +209,6 @@ Errors are returned as:
 ```
 
 Common status codes:
-
 - `400` validation
 - `401` unauthorized
 - `403` forbidden
@@ -145,17 +216,17 @@ Common status codes:
 - `409` duplicate/exists
 - `429` rate limited
 
-## Database schema
+---
+
+## Database Schema
 
 ### Collections
-
 - `users`
 - `schools`
 - `classrooms`
 - `students`
 
 ### Diagram (Mermaid)
-
 ```mermaid
 erDiagram
   USERS {
@@ -199,45 +270,26 @@ erDiagram
   CLASSROOMS ||--o{ STUDENTS : assigns
 ```
 
+---
+
 ## Tests
 
-Run unit/integration tests (uses in-memory MongoDB):
-
+Run tests:
 ```bash
 npm test
 ```
 
-## Deployment instructions
-
-### Option A: Render / Railway / Fly.io
-
-1. Provision a MongoDB instance (Atlas or provider-managed)
-2. Set env vars (see `.env.example`)
-3. Deploy with start command:
-
-```bash
-npm start
-```
-
-### Option B: Docker
-
-Example `Dockerfile` (not included to keep template minimal):
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY . .
-EXPOSE 5111
-CMD ["npm","start"]
-```
+---
 
 ## Notes / Assumptions
 
-- **Transfers** across schools are restricted to `SUPERADMIN` to avoid cross-school privilege escalation.
-- Rate limiting is implemented in-memory for simplicity. In production, swap to Redis for shared limits.
+- Transfers across schools are restricted to `SUPERADMIN` to prevent cross-school privilege escalation.
+- Rate limiting is implemented in-memory for simplicity; in production, use shared storage if horizontally scaling.
+- Hosted Redis providers typically require TLS (`rediss://`).
 
-### Author
-Moataz Hamdan
+---
+
+## Author
+
+Moataz Hamdan  
 Soar Backend Engineer Technical Challenge
